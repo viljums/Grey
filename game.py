@@ -6,8 +6,6 @@ class Game (object):
     def main (self, screen):
         clock = pygame.time.Clock ()
 
-        background = pygame.image.load ('background.png')
-        
         self.jump = pygame.mixer.Sound('jump.wav')
         self.shoot = pygame.mixer.Sound ('shoot.wav')
         self.explosion = pygame.mixer.Sound ('explosion.wav')
@@ -15,7 +13,7 @@ class Game (object):
         sprites = ScrolledGroup()
         sprites.camera_x = 0
 
-        self.tilemap = tmx.load ('map.tmx', screen.get_size())
+        self.tilemap = tmx.load ('protomap.tmx', screen.get_size())
 
         self.sprites = tmx.SpriteLayer()
         start_cell = self.tilemap.layers['triggers'].find('player')[0]
@@ -48,7 +46,7 @@ class Game (object):
                     return
 
             self.tilemap.update (dt / 1000., self, currentTime) #mechanix
-            screen.blit (background, (0, 0))
+            screen.fill ((255, 255, 255))
             self.tilemap.draw(screen)
             pygame.display.flip()
 
