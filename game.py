@@ -7,7 +7,6 @@ class Game (object):
         clock = pygame.time.Clock ()
 
         self.jump = pygame.mixer.Sound('jump.wav')
-        self.shoot = pygame.mixer.Sound ('shoot.wav')
         self.explosion = pygame.mixer.Sound ('explosion.wav')
 
         sprites = ScrolledGroup()
@@ -69,37 +68,28 @@ class Player (pygame.sprite.Sprite):
         self.dy = 0
         self.is_dead = False
         self.direction = 1
-        self.gun_cooldown = 0
         self.walkAnim = None
         self.walkLib = []
-        self.animStart = 0
-        self.nextFrame = -1
         self.slashLib = []
-        self.reverseSlashLib = []
         self.animDir = None
         self.jumpNumber = 0
+
+        slashLib = []
+        walkLib = []
         for x in range (4):
             currentImage = pygame.image.load ('PlayerImages/sla%s.png' % x)
-            self.slashLib.append (currentImage)
-            currentReversedIm = pygame.transform.flip (currentImage, True, False)
-            self.reverseSlashLib.append (currentReversedIm)
+            slashLib.append (currentImage)
+        slashLib.append (self.rightStand)
 
         for x in range (1, 7):
             currentImage = pygame.image.load ('PlayerImages/walk%s.png' % x) 
-            self.walkLib.append (currentImage)
+            walkLib.append (currentImage)
+
+        self.animation = Animation (walkLib)
+        self.slashAnim = Animation (slashLib)
 
         self.jumpNumber = 0
-
-    def walkAnimation (self, currentTime):
-            currentTime = (currentTime % 0.5) + 0.1
-            currentTime = round (currentTime, 1)
-            currentImage = None
-
-            for imageNumber in range (6):
-                frameTime = imageNumber/10.0
-                if currentTime >= frameTime: 
-                    currentImage = self.walkLib[imageNumber]
-            return currentImage
+        self.jumpStart = 0
 
 
     def update(self, dt, game, currentTime):
@@ -110,13 +100,13 @@ class Player (pygame.sprite.Sprite):
             self.direction = -1
             self.stand = self.leftStand
             if self.grounded:
-                self.image = pygame.transform.flip (self.walkAnimation (currentTime), True, False)
+                self.image = self.animation.getReverse (0.05, False)
         elif key[pygame.K_RIGHT]:
             self.rect.x += 300 * dt
             self.direction = 1
             self.stand = self.rightStand
             if self.grounded:
-                self.image = self.walkAnimation (currentTime)
+                self.image = self.animation.getNextFrame (0.05, False)
         else:
             currentTime = 0
             if self.direction < 0:
@@ -128,26 +118,23 @@ class Player (pygame.sprite.Sprite):
         #animation when slashing
 
         if game.sword.slash:
-            if  time.time () - self.animStart > 0.05:
-                self.nextFrame += 1
-                self.animStart = time.time ()
-            if self.nextFrame == 4:
-                self.image = self.stand
-                self.nextFrame = -1
-                self.animStart = 0
-                
-            elif game.sword.animDir > 0: 
-                self.image = self.slashLib[self.nextFrame]
+            nextFrame = None
+            if game.sword.animDir > 0: 
+                nextFrame = self.slashAnim.getNextFrame (0.05)
             else:
-                self.image = self.reverseSlashLib[self.nextFrame]
+                nextFrame = self.slashAnim.getReverse (0.05)
+
+            if nextFrame != 'end':
+                self.image = nextFrame
 
 
-        if self.grounded and key[pygame.K_SPACE]:
+        if self.grounded and key[pygame.K_SPACE] and not self.animation.timer (self.jumpStart, 0.3):
             game.jump.play()
             self.dy = -500
             game.sword.interval = 0
 
             self.jumpNumber += 1
+            self.jumpStart = time.time ()
 
             # double jump
 
@@ -158,6 +145,7 @@ class Player (pygame.sprite.Sprite):
         if self.jumpNumber == 2:
             self.grounded = False
             self.jumpNumber = 0
+            self.jumpStart = 0
 
         for cell in game.tilemap.layers['triggers'].collide(new, 'blockers'):
             blockers = cell['blockers']
@@ -225,19 +213,12 @@ class Sword (pygame.sprite.Sprite):
         rotSword1 = pygame.transform.rotate (self.image, -45)
         rotSword2 = pygame.transform.rotate (self.image, -90)
         rotSword3 = pygame.transform.rotate (self.image, -145)
-        rotSword4 = self.leftImage 
+        rotSword4 = self.leftImage
+        rotSword5 = self.leftImage
 
-        slashLib = [rotSword1, rotSword2, rotSword3, rotSword4]
-
-        rotSword1 = pygame.transform.rotate (self.leftImage, 45) 
-        rotSword2 = pygame.transform.rotate (self.leftImage, 90)
-        rotSword3 = pygame.transform.rotate (self.leftImage, 140)
-        rotSword4 = self.rightImage
-
-        reversedSlashLib = [rotSword1, rotSword2, rotSword3, rotSword4] 
+        slashLib = [rotSword1, rotSword2, rotSword3, rotSword4, rotSword5]
 
         self.animation = Animation (slashLib)
-        self.reverseAnim = Animation (reversedSlashLib)
 
     def update (self, dt, game, currentTime):
         slash = False
@@ -268,9 +249,10 @@ class Sword (pygame.sprite.Sprite):
 
         if self.slash:
             self.updateSlashLib (game)
-            nextFrame = self.animation.getNextFrame (0.05) 
-            if self.animDir < 0:
-                nextFrame = self.reverseAnim.getNextFrame (0.05)  
+            if self.animDir > 0:
+                nextFrame = self.animation.getNextFrame (0.05) 
+            elif self.animDir < 0:
+                nextFrame = self.animation.getReverse (0.05)
             self.rect = self.animation.rectAnimator(0.05, self.slashRectLib)
             if nextFrame == 'end':
                 self.slash = False
@@ -290,15 +272,17 @@ class Sword (pygame.sprite.Sprite):
         rotSword2 = game.player.rect.move (0, -64)
         rotSword3 = game.player.rect.move (22, -55)
         rotSword4 = game.player.rect.move (32, 32)
+        rotSword5 = game.player.rect.move (32, 32)
 
-        self.slashRectLib = [rotSword1, rotSword2, rotSword3, rotSword4]
+        self.slashRectLib = [rotSword1, rotSword2, rotSword3, rotSword4, rotSword5]
         if self.animDir < 0:
             rotSword1 = game.player.rect.move (32, -32)
             rotSword2 = game.player.rect.move (0, -64)
             rotSword3 = game.player.rect.move (-54, -54)
             rotSword4 = game.player.rect.move (-64, 32)
+            rotSword5 = game.player.rect.move (-64, 32)
 
-        self.slashRectLib = [rotSword1, rotSword2, rotSword3, rotSword4]
+        self.slashRectLib = [rotSword1, rotSword2, rotSword3, rotSword4, rotSword5]
 
 
 class Animation (object):
@@ -338,6 +322,13 @@ class Animation (object):
                 return 'end'
 
         return rectLib [self.frame]
+
+    def getReverse (self, frameTime, stopAfter = True):
+        surface = self.getNextFrame (frameTime, stopAfter)
+        if surface != 'end':
+            return pygame.transform.flip (surface, True, False)
+        else:
+            return 'end'
 
 
 if __name__ == '__main__':
