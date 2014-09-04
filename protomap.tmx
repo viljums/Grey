@@ -11,9 +11,12 @@
    </properties>
   </tile>
  </tileset>
+ <tileset firstgid="64" name="crappytiles" tilewidth="20" tileheight="20">
+  <image source="crappytiles.png" width="192" height="128"/>
+ </tileset>
  <layer name="Tile Layer 1" width="50" height="100">
   <data encoding="base64" compression="zlib">
-   eJztm8EKwjAQRKOi4FVEEBVBvang/3+dCVIotUlT042zyTwYvEjiY1zBNj0YY/aCOQiv3+zhIon0+s0e9IjfQxpJj4vN1eYmtH4bSY+7zcPmKbR+mxzfqxzQAwt6YEEPLOiBRa0eq0ByrtGl1j5QoQcWJXi8jC6Pmc28JwujyyMEPbBA9uibh4XnvcgeY6AHFige3VnwzYEPFI9U6IHFPzzaszB2DnywDyzoEUczC1PNgQ/2gQU9vnGzID0HPtgHFvTAokaPlPsT0tTYBzL0wIIeWNTosZb8IInU2Acy9MAi1eOf/2XbsA8s6IEFPYbJdY3awT6woEc6U97vZB9Y0AMLDR4xZ4E0eMRADyxK8NB2LjxEjId7bvkInluEx9ZmpyBDHiebs4KUMB8bU4ZHTb9XGqAHFvTAgh5YhDx8zx2G8st1qCn2qaEPTZTksTSfM3uaX13e4y8qLA==
+   eJztm91qwkAQhbeVCr2VIhQtBfXOCr5Ce1kv7fs/S2cxgaBuXN1MciZzPjh4E3bzcRzE/CxCCO+KWSivX+8Ro4n2+vUe9MjfQxtNj5VkLdkord9E02Mr+ZLslNZv0sf3qg/ogQU9sKAHFvTAwqvHtCV9rnGO1z5QoQcWY/DYB1seT5LnK5kEWx5t0AMLZI9r8zBJHIvscQ/0wALF43wWUnOQAsWjFHpgMYRHcxbunYMU7AMLeuRRz0JXc5CCfWBBj0viLGjPQQr2gQU9sPDoUXJ/QhuPfSBDDyzogYVHj1fNEynEYx/I0AOLUo8h/8s2YR9Y0AMLetymr2vUEfaBBT3K6fJ+J/vAgh5YWPDIeRbIgkcO9MBiDB7WngtvI8cjvre8BM8mw+NNMjeQWx4fkk8DGcN8zCTfkp8qVold/EoOVawSPY6SvypWiR6zoU+iAzz9DlqAHlh48Ei9d9iWR65DdbGPhz4sMSaPl3B6Zs/yZ8w/1Mwscg==
   </data>
  </layer>
  <objectgroup name="triggers" width="50" height="100" visible="0">
@@ -250,6 +253,11 @@
   <object gid="59" x="960" y="439">
    <properties>
     <property name="spawner" value=""/>
+   </properties>
+  </object>
+  <object name="tlbr" x="23" y="1719" width="34" height="63">
+   <properties>
+    <property name="blockers" value="tlbr"/>
    </properties>
   </object>
  </objectgroup>

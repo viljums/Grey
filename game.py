@@ -1,6 +1,6 @@
 import tmx, time
 import pygame
-
+from pygame.locals import*
 
 class Game (object):
     def main (self, screen):
@@ -43,6 +43,7 @@ class Game (object):
                 if event.type == pygame.KEYDOWN and \
                         event.key == pygame.K_ESCAPE:
                     return
+                self.player.get_event (event)
 
             self.tilemap.update (dt / 1000., self, currentTime) #mechanix
             screen.fill ((255, 255, 255))
@@ -72,7 +73,7 @@ class Player (pygame.sprite.Sprite):
         self.walkLib = []
         self.slashLib = []
         self.animDir = None
-        self.jumpNumber = 0
+        self.airJump = False
 
         slashLib = []
         walkLib = []
@@ -88,8 +89,24 @@ class Player (pygame.sprite.Sprite):
         self.animation = Animation (walkLib)
         self.slashAnim = Animation (slashLib)
 
-        self.jumpNumber = 0
-        self.jumpStart = 0
+        self.firstJump = False 
+        self.secondJump = False
+        self.keyUp = False
+        self.air = False
+
+    def get_event (self, event):
+        if event.type == KEYDOWN:
+            if event.key == K_SPACE and self.grounded and not self.air:
+                self.firstJump = True
+                self.grounded = False
+            elif event.key == K_SPACE and (self.keyUp or self.air) and self.airJump: 
+                print 'cookies'
+                self.secondJump = True
+                self.airJump = False
+        if event.type == KEYUP:
+            if event.key == K_SPACE:
+                self.keyUp = True
+                self.firstJump = False
 
 
     def update(self, dt, game, currentTime):
@@ -99,12 +116,16 @@ class Player (pygame.sprite.Sprite):
             self.rect.x -= 300 * dt
             self.direction = -1
             self.stand = self.leftStand
+            if self.air:
+                self.rect.x += 100 * dt # speed boost while in air
             if self.grounded:
                 self.image = self.animation.getReverse (0.05, False)
         elif key[pygame.K_RIGHT]:
             self.rect.x += 300 * dt
             self.direction = 1
             self.stand = self.rightStand
+            if self.air:
+                self.rect.x += 100 * dt
             if self.grounded:
                 self.image = self.animation.getNextFrame (0.05, False)
         else:
@@ -117,7 +138,7 @@ class Player (pygame.sprite.Sprite):
 
         #animation when slashing
 
-        if game.sword.slash:
+        if game.sword.slash: 
             nextFrame = None
             if game.sword.animDir > 0: 
                 nextFrame = self.slashAnim.getNextFrame (0.05)
@@ -127,26 +148,29 @@ class Player (pygame.sprite.Sprite):
             if nextFrame != 'end':
                 self.image = nextFrame
 
+        # jump
 
-        if self.grounded and key[pygame.K_SPACE] and not self.animation.timer (self.jumpStart, 0.3):
-            game.jump.play()
-            self.dy = -500
+        if self.firstJump or self.secondJump: 
+            #game.jump.play()
+            self.dy -= 150
+            if self.firstJump and self.dy < -500:
+                self.firstJump = False
+            if self.secondJump and self.dy < -400:
+                self.secondJump = False
+                self.airJump = False
+            #resets sword cd
             game.sword.interval = 0
 
-            self.jumpNumber += 1
-            self.jumpStart = time.time ()
+        #gravity
 
-            # double jump
 
-        self.dy = min (400, self.dy + 40)
+        self.dy = min (400, self.dy + 40) # 400
         self.rect.y += self.dy * dt
 
-        new = self.rect
-        if self.jumpNumber == 2:
-            self.grounded = False
-            self.jumpNumber = 0
-            self.jumpStart = 0
+        #blocking the sprite
 
+        self.air = True # checks if player is flying through air
+        new = self.rect
         for cell in game.tilemap.layers['triggers'].collide(new, 'blockers'):
             blockers = cell['blockers']
             if 'l' in blockers and last.right <= cell.left and new.right > cell.left:
@@ -157,6 +181,11 @@ class Player (pygame.sprite.Sprite):
                 self.grounded = True
                 new.bottom = cell.top
                 self.dy = 0
+                self.firstJump = False
+                self.secondJump = False
+                self.keyUp = False
+                self.airJump = True
+                self.air = False
             if 'b' in blockers and last.top >= cell.bottom and new.top < cell.bottom:
                 new.top = cell.bottom
                 self.dy = 0
