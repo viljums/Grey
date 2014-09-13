@@ -1,8 +1,20 @@
-import tmx, time
+import time, tmx
 import pygame
 from pygame.locals import*
 
 class Game (object):
+    def __init__ (self):
+        self.changeLevel = False
+        self.sprites = tmx.SpriteLayer()
+        self.mapLib = ['Maps/protomap.tmx', 'Maps/layer2.tmx']
+        self.mapNumber = 0
+        self.mapFile = self.mapLib[self.mapNumber]
+        self.tilemap = tmx.load (self.mapFile, screen.get_size())
+        start_cell = self.tilemap.layers['triggers'].find('player')[0]
+        self.player = Player((start_cell.px, start_cell.py), self.sprites)
+        self.sword = Sword (self.sprites)
+        self.cdBar = CDBar (self.sprites)
+
     def main (self, screen):
         clock = pygame.time.Clock ()
 
@@ -12,47 +24,63 @@ class Game (object):
         sprites = ScrolledGroup()
         sprites.camera_x = 0
 
-        self.tilemap = tmx.load ('protomap.tmx', screen.get_size())
+        self.mapFile = self.mapLib[self.mapNumber]
+        self.tilemap = tmx.load (self.mapFile, screen.get_size())
 
-        self.sprites = tmx.SpriteLayer()
-        start_cell = self.tilemap.layers['triggers'].find('player')[0]
-        self.player = Player((start_cell.px, start_cell.py), self.sprites)
+        #self.sprites = tmx.SpriteLayer()
 
-        self.sword = Sword (self.sprites)
+
+
 
         self.tilemap.layers.append (self.sprites)
 
 
+
         self.enemies = tmx.SpriteLayer()
         for enemy in self.tilemap.layers['triggers'].find('enemy'):
-            Enemy ((enemy.px, enemy.py), self.enemies)
+            enemyType = enemy['enemy']
+            if 'worm' in enemyType:
+                Worm ((enemy.px, enemy.py), self.enemies)
+
+            else:
+
+                Enemy ((enemy.px, enemy.py), self.enemies)
+        #for cell in game.tilemap.layers['triggers'].collide(new, 'blockers'):
+            #blockers = cell['blockers']
+            #if 'l' in blockers and last.right <= cell.left and new.right > cell.left:
+  
         self.tilemap.layers.append(self.enemies)
 
 
         image_x = 323
         image_y = 369
 
-        currentTime = 0
 
         while True:
             dt = clock.tick(30)
-            currentTime = time.time () + dt
             for event in pygame.event.get ():
                 if event.type == pygame.QUIT:
-                    return
+                    return 'dead'
                 if event.type == pygame.KEYDOWN and \
                         event.key == pygame.K_ESCAPE:
-                    return
+                    return 'dead'
                 self.player.get_event (event)
 
-            self.tilemap.update (dt / 1000., self, currentTime) #mechanix
+            self.tilemap.update (dt / 1000., self) #mechanix
             screen.fill ((255, 255, 255))
             self.tilemap.draw(screen)
             pygame.display.flip()
 
             if self.player.is_dead:
-                print 'YOU DIED'
-                return
+                return 'dead'
+            if self.changeLevel:
+                self.changeLevel = False
+                return 'next'
+
+    def nextMap (self, screen):
+        self.mapNumber += 1
+        self.main(screen)
+
 
 
 class Player (pygame.sprite.Sprite):
@@ -93,6 +121,9 @@ class Player (pygame.sprite.Sprite):
         self.secondJump = False
         self.keyUp = False
         self.air = False
+        
+        self.rotation = 0
+        self.spinAttack = False
 
     def get_event (self, event):
         if event.type == KEYDOWN:
@@ -100,7 +131,6 @@ class Player (pygame.sprite.Sprite):
                 self.firstJump = True
                 self.grounded = False
             elif event.key == K_SPACE and (self.keyUp or self.air) and self.airJump: 
-                print 'cookies'
                 self.secondJump = True
                 self.airJump = False
         if event.type == KEYUP:
@@ -109,7 +139,18 @@ class Player (pygame.sprite.Sprite):
                 self.firstJump = False
 
 
-    def update(self, dt, game, currentTime):
+    def update(self, dt, game):
+        last = self.walkingAnimation (dt)
+        self.slashAnimation (game)
+        self.jump (game)
+        self.jumpAnimation (dt)
+        self.spin (game)
+        self.spriteBlock (game, last)
+        self.spikes (game)
+
+
+
+    def walkingAnimation (self, dt):
         last = self.rect.copy()
         key = pygame.key.get_pressed()
         if key[pygame.K_LEFT]:
@@ -117,7 +158,7 @@ class Player (pygame.sprite.Sprite):
             self.direction = -1
             self.stand = self.leftStand
             if self.air:
-                self.rect.x += 100 * dt # speed boost while in air
+                self.rect.x -= 100 * dt # speed boost while in air
             if self.grounded:
                 self.image = self.animation.getReverse (0.05, False)
         elif key[pygame.K_RIGHT]:
@@ -129,14 +170,16 @@ class Player (pygame.sprite.Sprite):
             if self.grounded:
                 self.image = self.animation.getNextFrame (0.05, False)
         else:
-            currentTime = 0
             if self.direction < 0:
                 self.image = pygame.transform.flip (self.rightStand, True, False)
                 self.image = self.leftStand
             elif self.direction > 0:
                 self.image = self.rightStand
+        return last
 
         #animation when slashing
+
+    def slashAnimation (self, game):
 
         if game.sword.slash: 
             nextFrame = None
@@ -148,27 +191,56 @@ class Player (pygame.sprite.Sprite):
             if nextFrame != 'end':
                 self.image = nextFrame
 
-        # jump
-
+    def jump (self, game):
         if self.firstJump or self.secondJump: 
-            #game.jump.play()
             self.dy -= 150
+            
             if self.firstJump and self.dy < -500:
                 self.firstJump = False
             if self.secondJump and self.dy < -400:
                 self.secondJump = False
                 self.airJump = False
+                self.rotation = 0
+
+                self.spinAttack = True
+            
             #resets sword cd
             game.sword.interval = 0
 
+        #jumpimage
+    def jumpAnimation (self, dt):
+        jumpImage = pygame.image.load ('PlayerImages/jump0.png')
+        if self.dy < 0 and self.direction > 0:
+                self.image =  jumpImage
+        elif self.dy < 0 and self.direction < 0:
+                self.image = pygame.transform.flip (jumpImage, True, False)
         #gravity
 
 
         self.dy = min (400, self.dy + 40) # 400
         self.rect.y += self.dy * dt
 
-        #blocking the sprite
+        #spin
+    def spin (self, game):
+        if self.spinAttack:
+            if self.direction > 0:
+                #rotation
+                self.rotation -= 30
+                rotImage = pygame.image.load ('PlayerImages/rotjump.png')
+                self.image = pygame.transform.rotate (rotImage, self.rotation)
+       
+            elif self.direction < 0:
+                self.rotation -= 30
+                rotImage = pygame.image.load ('PlayerImages/rotjump.png')
+                rotImage = pygame.transform.rotate (rotImage, self.rotation)
+                self.image = pygame.transform.flip (rotImage, True, False)
 
+            if pygame.sprite.spritecollide(self, game.enemies, True):
+                    game.explosion.play()
+
+            
+        #blocking the sprite
+    def spriteBlock (self, game, last):
         self.air = True # checks if player is flying through air
         new = self.rect
         for cell in game.tilemap.layers['triggers'].collide(new, 'blockers'):
@@ -186,13 +258,25 @@ class Player (pygame.sprite.Sprite):
                 self.keyUp = False
                 self.airJump = True
                 self.air = False
+                self.spinAttack = False
+                self.spinAttackOffset = time.time () # player remains lethal for a few decasecs on ground
+
             if 'b' in blockers and last.top >= cell.bottom and new.top < cell.bottom:
                 new.top = cell.bottom
                 self.dy = 0
-        
+                self.secondJump = False
         game.tilemap.set_focus(new.x, new.y)
 
         self.groups()[0].camera_x = self.rect.x - 320
+
+    def spikes (self, game):
+        if game.tilemap.layers['triggers'].collide (self.rect, 'spikes'):
+            game.player.is_dead = True
+
+    def playSound (self, game):
+        if self.firstJump or self.secondJump: 
+
+            game.jump.play ()
 
         
 
@@ -203,13 +287,13 @@ class ScrolledGroup(pygame.sprite.Group):
             surface.blit(sprite.image, (sprite.rect.x - self.camera_x, sprite.rect.y))
 
 class Enemy(pygame.sprite.Sprite):
-    image = pygame.image.load('enemy.png')
+    image = pygame.image.load('Enemies/enemy.png')
     def __init__(self, location, *groups):
         super(Enemy, self).__init__(*groups)
         self.rect = pygame.rect.Rect (location, self.image.get_size())
         self.direction = 1
 
-    def update (self, dt, game, currentTime):
+    def update (self, dt, game):
         self.rect.x += self.direction * 100 * dt
         for cell in game.tilemap.layers['triggers'].collide(self.rect, 'reverse'):
             if self.direction > 0:
@@ -218,10 +302,40 @@ class Enemy(pygame.sprite.Sprite):
                 self.rect.left = cell.right
             self.direction *= -1
             break
-        if self.rect.colliderect(game.player.rect):
+        if self.rect.colliderect(game.player.rect) and not game.player.spinAttack:
             game.player.is_dead = True
 
-        
+class Worm (pygame.sprite.Sprite):
+    def __init__(self, location, *groups):
+        super(Worm, self).__init__(*groups)
+        self.image = pygame.image.load('Enemies/worm0.png')
+        self.rect = pygame.rect.Rect (location, self.image.get_size())
+        self.direction = 1
+        wormLib = []
+        for imgNumber in range (4):
+            currentImage = pygame.image.load ('Enemies/worm%s.png' % imgNumber)
+            wormLib.append (currentImage)
+
+        self.anim = Animation (wormLib)
+
+    def update (self, dt, game):
+        self.rect.x += self.direction * 100 * dt
+        if self.direction > 0:
+            self.image = self.anim.getNextFrame (0.1, False) 
+        else:
+            self.image = self.anim.getReverse (0.1, False)
+
+        for cell in game.tilemap.layers['triggers'].collide(self.rect, 'reverse'):
+            if self.direction > 0:
+                self.rect.right = cell.left
+
+            else:
+                self.rect.left = cell.right
+            self.direction *= -1
+            break
+        if self.rect.colliderect(game.player.rect) and not game.player.spinAttack:
+            game.player.is_dead = True
+       
 
 class Sword (pygame.sprite.Sprite):
 
@@ -236,6 +350,7 @@ class Sword (pygame.sprite.Sprite):
         self.rectLib = []
         self.animDir = None
         self.coolDown = False
+        self.interval = 0
 
         # transforming sprites to make animation frames
 
@@ -249,7 +364,7 @@ class Sword (pygame.sprite.Sprite):
 
         self.animation = Animation (slashLib)
 
-    def update (self, dt, game, currentTime):
+    def update (self, dt, game):
         slash = False
         self.rect = self.standartRect
         if game.player.direction < 0 and not slash:
@@ -268,7 +383,7 @@ class Sword (pygame.sprite.Sprite):
             self.interval = 0 
                 
 
-        if key[pygame.K_LSHIFT] and not self.coolDown:
+        if key[pygame.K_LSHIFT] and not self.coolDown and not game.player.spinAttack:
             self.slash = True
             animStart = time.time ()
             self.animDir = game.player.direction
@@ -293,6 +408,11 @@ class Sword (pygame.sprite.Sprite):
                     game.explosion.play()
                 
         
+        if game.player.spinAttack:
+            self.image = pygame.image.load ('PlayerImages/blank.png')
+
+        if game.tilemap.layers['triggers'].collide(self.rect, 'nextLevel'):
+            game.changeLevel = True
         
     def updateSlashLib (self, game):
         #slash lib conf, relies on direction 
@@ -313,6 +433,27 @@ class Sword (pygame.sprite.Sprite):
 
         self.slashRectLib = [rotSword1, rotSword2, rotSword3, rotSword4, rotSword5]
 
+        
+class CDBar (pygame.sprite.Sprite):
+    def __init__(self, *groups):
+        super(CDBar, self).__init__(*groups)
+        self.image = pygame.image.load ('PlayerImages/blank.png')
+        self.rect = pygame.rect.Rect ((0, 0), self.image.get_size())
+
+    def update (self, dt, game):
+        x, y, w, h = game.player.rect
+        w = 8; y -= 16; h = 30
+        slashTime = game.sword.interval
+        if slashTime != 0:
+            h -= (10 *(time.time () - slashTime))
+        else:
+            h = 0
+        barSurf = pygame.Surface ((h, w))
+        barSurf.fill ((0, 0, 0))
+        self.rect = pygame.Rect (x, y, w, h)
+        self.image = barSurf
+        
+
 
 class Animation (object):
 
@@ -321,6 +462,8 @@ class Animation (object):
         self.frame = -1
         self.animStart = 0.
         
+
+    #gets False if interval in cd hadnt reached.
 
     def timer (self, start, cd):
         if time.time () - start > cd:
@@ -363,5 +506,17 @@ class Animation (object):
 if __name__ == '__main__':
     pygame.init()
     screen = pygame.display.set_mode ((640, 480))
-    Game().main(screen)
-
+    game = Game()
+    status = game.main(screen)
+    while True:
+        if status == 'next':
+            status = game.nextMap (screen)
+        elif status == 'dead':
+            print "Player is kill"
+            break
+        elif status == 'victory':
+            print "Is Victorious"
+            break
+        else:
+            print "error"
+            break
