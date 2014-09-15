@@ -37,19 +37,23 @@ class Game (object):
 
 
         self.enemies = tmx.SpriteLayer()
+        self.immortalSprites = tmx.SpriteLayer ()
         for enemy in self.tilemap.layers['triggers'].find('enemy'):
             enemyType = enemy['enemy']
             if 'worm' in enemyType:
                 Worm ((enemy.px, enemy.py), self.enemies)
-
+            elif 'spitter' in enemyType:
+                Spitter ((enemy.px, enemy.py), self.enemies)
             else:
-
                 Enemy ((enemy.px, enemy.py), self.enemies)
-        #for cell in game.tilemap.layers['triggers'].collide(new, 'blockers'):
-            #blockers = cell['blockers']
-            #if 'l' in blockers and last.right <= cell.left and new.right > cell.left:
-  
+
+        for cell in self.tilemap.layers['triggers'].find('blockers'):
+            blocker = cell['blockers']
+            if 'crawler' in blocker:
+                Crawler (pygame.Rect (cell.px, cell.py, cell.width, cell.height), self.enemies)
+            
         self.tilemap.layers.append(self.enemies)
+        self.tilemap.layers.append (self.immortalSprites)
 
 
         image_x = 323
@@ -195,7 +199,7 @@ class Player (pygame.sprite.Sprite):
         if self.firstJump or self.secondJump: 
             self.dy -= 150
             
-            if self.firstJump and self.dy < -500:
+            if self.firstJump and self.dy < -2000:
                 self.firstJump = False
             if self.secondJump and self.dy < -400:
                 self.secondJump = False
@@ -336,6 +340,120 @@ class Worm (pygame.sprite.Sprite):
         if self.rect.colliderect(game.player.rect) and not game.player.spinAttack:
             game.player.is_dead = True
        
+class Spitter (pygame.sprite.Sprite):
+    def __init__(self, location, *groups):
+        super(Spitter, self).__init__(*groups)
+        self.image = pygame.image.load('Enemies/spitter.png')
+        self.rect = pygame.rect.Rect (location, self.image.get_size())
+        self.location = location
+        self.direction = 1
+        self.shootStart = time.time ()
+        spitLib = []
+        for imgNumber in range (4):
+            currentImage = pygame.image.load ('Enemies/spitterSpit%s.png' % imgNumber)
+            spitLib.append (currentImage)
+        for imgNumber in range (-3, 1):
+            currentImage = pygame.image.load ('Enemies/spitterSpit%s.png' % (- imgNumber))
+            spitLib.append (currentImage)
+
+        self.anim = Animation (spitLib)
+        self.spitSide = self.rect.topleft
+
+    def spittingAnim (self, game):
+        nextFrame = self.anim.getNextFrame (0.05)
+        if nextFrame == 'end':
+            self.shootStart = time.time ()
+            Spit (self.spitSide, self.direction, game.immortalSprites)
+            self.image = pygame.image.load('Enemies/spitter.png')
+        else:
+            self.image = nextFrame
+
+
+    def update (self, dt, game):
+        self.rect.x += self.direction * 50 * dt
+        if self.direction > 0:
+            self.spitSide = self.rect.midright
+        else:
+            self.spitSide = self.rect.midleft
+
+        for cell in game.tilemap.layers['triggers'].collide(self.rect, 'reverse'):
+            if self.direction > 0:
+                self.rect.right = cell.left
+            else:
+                self.rect.left = cell.right
+            self.direction *= -1
+            break
+        if self.rect.colliderect(game.player.rect) and not game.player.spinAttack:
+            game.player.is_dead = True
+
+        if not self.anim.timer (self.shootStart, 2):
+            self.spittingAnim (game)
+
+
+
+class Spit (pygame.sprite.Sprite):
+    image = pygame.image.load ('Enemies/spit.png')
+    def __init__(self, location, direction, *groups): 
+        super(Spit, self).__init__(*groups)
+        self.rect = pygame.rect.Rect (location, self.image.get_size())
+        self.direction = direction
+        self.anim = Animation ([])
+        self.lifeTime = time.time ()
+        self.rotation = 0
+
+    def update (self, dt, game):
+        self.rotation += 90
+        self.image = pygame.transform.rotate (self.image, 90)
+        self.lifeTime = time.time ()
+        self.rect.x += self.direction * 130 * dt
+        if not self.anim.timer (self.lifeTime, 2):
+            self.kill ()
+
+        
+        if self.rect.colliderect(game.player.rect) and not game.player.spinAttack:
+            game.player.is_dead = True
+
+
+class Crawler (pygame.sprite.Sprite):
+    def __init__(self, patrolRect, *groups): 
+        super(Crawler, self).__init__(*groups)
+        self.image = pygame.image.load ('Enemies/crawler.png')
+        self.rect = pygame.rect.Rect (patrolRect.topleft, self.image.get_size())
+        self.patrolRect = patrolRect
+        self.rect.bottomright = self.patrolRect.topleft
+
+    def getDirection (self):
+        rect = self.rect
+        path = self.patrolRect
+        if rect.right == path.left and rect.bottom == path.top:
+            self.direction = 'right'
+        elif rect.left == path.right and rect.bottom == path.top:
+            self.direction = 'down'
+        if rect.left == path.right and rect.top == path.bottom:
+            self.direction = 'left'
+        elif rect.right == path.left and rect.top == path.bottom:
+            self.direction = 'up'
+
+    def update (self, dt, game):
+        self.getDirection ()
+        print self.direction
+
+        if self.direction == 'right':
+            self.rect.left += 100 * dt
+            self.rect.left = min (self.rect.left, self.patrolRect.right)
+        elif self.direction == 'down':
+            self.rect.top += 100 *dt
+            self.rect.top = min (self.rect.top, self.patrolRect.bottom)
+        elif self.direction == 'left':
+            self.rect.right -= 100 * dt
+            self.rect.right = max (self.rect.right, self.patrolRect.left)
+        elif self.direction == 'up':
+            self.rect.bottom -= 100 * dt
+            self.rect.bottom = max (self.rect.bottom, self.patrolRect.top)
+
+        if self.rect.colliderect(game.player.rect): 
+            game.player.is_dead = True
+    
 
 class Sword (pygame.sprite.Sprite):
 
