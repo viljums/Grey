@@ -6,7 +6,7 @@ class Game (object):
     def __init__ (self):
         self.changeLevel = False
         self.sprites = tmx.SpriteLayer()
-        self.mapLib = ['Maps/protomap.tmx', 'Maps/layer2.tmx']
+        self.mapLib = ['Maps/layer3.tmx', 'Maps/layer2.tmx', 'Maps/layer3.tmx']
         self.mapNumber = 0
         self.mapFile = self.mapLib[self.mapNumber]
         self.tilemap = tmx.load (self.mapFile, screen.get_size())
@@ -83,7 +83,7 @@ class Game (object):
 
     def nextMap (self, screen):
         self.mapNumber += 1
-        self.main(screen)
+        return self.main(screen)
 
 
 
@@ -199,14 +199,16 @@ class Player (pygame.sprite.Sprite):
         if self.firstJump or self.secondJump: 
             self.dy -= 150
             
-            if self.firstJump and self.dy < -2000:
+            if self.secondJump:
+                self.spinAttack = True
+            if self.firstJump and self.dy < -500:
                 self.firstJump = False
             if self.secondJump and self.dy < -400:
                 self.secondJump = False
                 self.airJump = False
                 self.rotation = 0
 
-                self.spinAttack = True
+
             
             #resets sword cd
             game.sword.interval = 0
@@ -249,10 +251,7 @@ class Player (pygame.sprite.Sprite):
         new = self.rect
         for cell in game.tilemap.layers['triggers'].collide(new, 'blockers'):
             blockers = cell['blockers']
-            if 'l' in blockers and last.right <= cell.left and new.right > cell.left:
-                new.right = cell.left
-            if 'r' in blockers and last.left >= cell.right and new.left < cell.right:
-                new.left = cell.right
+            
             if 't' in blockers and last.bottom <= cell.top and new.bottom > cell.top:
                 self.grounded = True
                 new.bottom = cell.top
@@ -263,12 +262,20 @@ class Player (pygame.sprite.Sprite):
                 self.airJump = True
                 self.air = False
                 self.spinAttack = False
-                self.spinAttackOffset = time.time () # player remains lethal for a few decasecs on ground
 
-            if 'b' in blockers and last.top >= cell.bottom and new.top < cell.bottom:
+
+            elif 'b' in blockers and last.top >= cell.bottom and new.top < cell.bottom:
                 new.top = cell.bottom
                 self.dy = 0
                 self.secondJump = False
+                self.firstJump = False
+            elif 'l' in blockers and last.right <= cell.left and new.right > cell.left:
+                new.right = cell.left
+            elif 'r' in blockers and last.left >= cell.right and new.left < cell.right:
+                new.left = cell.right
+
+
+
         game.tilemap.set_focus(new.x, new.y)
 
         self.groups()[0].camera_x = self.rect.x - 320
@@ -436,7 +443,6 @@ class Crawler (pygame.sprite.Sprite):
 
     def update (self, dt, game):
         self.getDirection ()
-        print self.direction
 
         if self.direction == 'right':
             self.rect.left += 100 * dt
@@ -570,7 +576,6 @@ class CDBar (pygame.sprite.Sprite):
         barSurf.fill ((0, 0, 0))
         self.rect = pygame.Rect (x, y, w, h)
         self.image = barSurf
-        
 
 
 class Animation (object):
@@ -627,6 +632,7 @@ if __name__ == '__main__':
     game = Game()
     status = game.main(screen)
     while True:
+        print status
         if status == 'next':
             status = game.nextMap (screen)
         elif status == 'dead':
@@ -634,7 +640,4 @@ if __name__ == '__main__':
             break
         elif status == 'victory':
             print "Is Victorious"
-            break
-        else:
-            print "error"
             break
